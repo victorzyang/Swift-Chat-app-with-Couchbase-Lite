@@ -17,6 +17,7 @@
 import UIKit
 import Starscream
 import PopupDialog
+import CouchbaseLiteSwift //added for thesis
 
 class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate {
     
@@ -37,10 +38,20 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
     var messages: [String] = []
     var request = URLRequest(url: URL(string: "http://localhost:3000")!)
     //var request = URLRequest(url: URL(string: "http://134.117.26.92:3000")!)
+    
+    var database:Database? = nil //added for thesis
+    var listOfMessages: [String] = []
+    var listOfDateTimes: [String] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
  
+        do {
+            database = try Database(name: "chatHistoryDB")
+        } catch {
+            fatalError("Error opening database")
+        }
+        
         request.timeoutInterval = 30
         socket = WebSocket(request: request)
         socket.delegate = self
@@ -58,6 +69,7 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
         toggleButtons()
     }
     
+    //TODO: or actually, should I call insert here?
     func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
         print("websocketDidDisconnect")
         if let e = error as? WSError {
@@ -67,12 +79,44 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
         } else {
             showDialog(type: ConnectionType.Disconnet)
         }
+        
+        let mutableDoc = MutableDocument();
+        let messagesArray = MutableArrayObject()
+        
+        for m in 0..<listOfMessages.count {
+            let messageDict = MutableDictionaryObject();
+            messageDict.setString("User", forKey: "User")
+            messageDict.setString(listOfMessages[m], forKey: "Message")
+            messageDict.setString(listOfDateTimes[m], forKey: "Datetime")
+            messagesArray.addDictionary(messageDict)
+        }
+        
+        mutableDoc.setString("messages", forKey: "type")
+        mutableDoc.setArray(messagesArray, forKey: "Messages")
+
+        do {
+            try database?.saveDocument(mutableDoc)
+        } catch {
+            fatalError("Error saving document")
+        }
+        
+        listOfMessages.removeAll() //added for thesis
+        listOfDateTimes.removeAll() //added for thesis
     }
     
     func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
         if ( !text.contains("Connected to Server") ) {
             messages.append(text)
             updateTableView()
+            
+            listOfMessages.append(text)
+            
+            let date = Date()
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "dd/MM/yyyy"
+            let datetime = dateFormatter.string(from: date)
+            listOfDateTimes.append(datetime)
+            
         }
     }
     
@@ -113,6 +157,64 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             socket.disconnect()
             toggleButtons()
         }
+    }
+    
+    // Display database data
+    @IBAction func displayData(_ sender: UIButton){
+        let resultSet = QueryBuilder
+            .select(
+                SelectResult.expression(Meta.id),
+                SelectResult.property("Messages"))
+            .from(DataSource.database(database!))
+            .where(Expression.property("type").equalTo(Expression.string("messages")))
+        
+        var messageDisplay = ""
+        
+        do {
+            for result in try resultSet.execute() {
+                messageDisplay += "Messages: ["
+                let messagesArray = result.array(forKey: "Messages")
+                for index in 0..<messagesArray!.count{
+                    messageDisplay += "{Message_id: "
+                    messageDisplay += result.string(forKey: "id")!
+                    messageDisplay += ", User: "
+                    messageDisplay += (messagesArray?.dictionary(at: index)?.string(forKey: "User"))!
+                    messageDisplay += ", Message: "
+                    messageDisplay += (messagesArray?.dictionary(at: index)?.string(forKey: "Message"))!
+                    messageDisplay += ", Datetime: "
+                    messageDisplay += (messagesArray?.dictionary(at: index)?.string(forKey: "Datetime"))!
+                    if index != messagesArray!.count - 1 {
+                        messageDisplay += "}, "
+                    } else {
+                        messageDisplay += "}"
+                    }
+                }
+                
+                messageDisplay += "]\n\n"
+            }
+            
+            showMessage(title: "Database Data", message: messageDisplay)
+        } catch {
+            print(error)
+        }
+    }
+    
+    func showMessage(title: String, message: String){
+        let alert = UIAlertController(title: title, message: message, preferredStyle: UIAlertController.Style.alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { action in
+            switch action.style{
+                case .default:
+                print("default")
+                
+                case .cancel:
+                print("cancel")
+                
+                case .destructive:
+                print("destructive")
+                
+            }
+        }))
+        self.present(alert, animated: true, completion: nil)
     }
     
     // MARK: TableView Methods
