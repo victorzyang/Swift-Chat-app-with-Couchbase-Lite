@@ -39,7 +39,8 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
     var request = URLRequest(url: URL(string: "http://localhost:3000")!)
     //var request = URLRequest(url: URL(string: "http://134.117.26.92:3000")!)
     
-    var database:Database? = nil //added for thesis
+    //added for thesis
+    var database:Database? = nil
     var listOfMessages: [String] = []
     var listOfDateTimes: [String] = []
 
@@ -69,7 +70,7 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
         toggleButtons()
     }
     
-    //TODO: or actually, should I call insert here?
+    //when user disconnects, the chat history up until the user disconnection is inserted into database
     func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
         print("websocketDidDisconnect")
         if let e = error as? WSError {
@@ -80,9 +81,10 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             showDialog(type: ConnectionType.Disconnet)
         }
         
-        let mutableDoc = MutableDocument();
+        let mutableDoc = MutableDocument(); //document representing an array of messages during a certain period
         let messagesArray = MutableArrayObject()
         
+        //iterate through all messages up until a user disconnection
         for m in 0..<listOfMessages.count {
             let messageDict = MutableDictionaryObject();
             messageDict.setString("User", forKey: "User")
@@ -91,15 +93,17 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             messagesArray.addDictionary(messageDict)
         }
         
+        //set the attributes of the document
         mutableDoc.setString("messages", forKey: "type")
         mutableDoc.setArray(messagesArray, forKey: "Messages")
 
         do {
-            try database?.saveDocument(mutableDoc)
+            try database?.saveDocument(mutableDoc) //save document to database
         } catch {
             fatalError("Error saving document")
         }
         
+        //reset the helper lists
         listOfMessages.removeAll() //added for thesis
         listOfDateTimes.removeAll() //added for thesis
     }
@@ -109,13 +113,14 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             messages.append(text)
             updateTableView()
             
-            listOfMessages.append(text)
+            listOfMessages.append(text) //add message to helper list of messages
             
+            //Get the date of the message (ie. the current date)
             let date = Date()
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "dd/MM/yyyy"
             let datetime = dateFormatter.string(from: date)
-            listOfDateTimes.append(datetime)
+            listOfDateTimes.append(datetime) //add date to helper list of datetimes
             
         }
     }
@@ -161,6 +166,7 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
     
     // Display database data
     @IBAction func displayData(_ sender: UIButton){
+        //query to fetch documents of type "messages"
         let resultSet = QueryBuilder
             .select(
                 SelectResult.expression(Meta.id),
@@ -168,10 +174,11 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             .from(DataSource.database(database!))
             .where(Expression.property("type").equalTo(Expression.string("messages")))
         
-        var messageDisplay = ""
+        var messageDisplay = "" //this is the variable containing everything to display to the UI
         
+        //run the 'resultSet' query
         do {
-            for result in try resultSet.execute() {
+            for result in try resultSet.execute() { //iterates through all messages in all chat sessions in the database to append information to display to the messageDisplay variable
                 messageDisplay += "Messages: ["
                 let messagesArray = result.array(forKey: "Messages")
                 for index in 0..<messagesArray!.count{
@@ -193,12 +200,13 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
                 messageDisplay += "]\n\n"
             }
             
-            showMessage(title: "Database Data", message: messageDisplay)
+            showMessage(title: "Database Data", message: messageDisplay) //calls function to trigger an alert that displays the database data
         } catch {
             print(error)
         }
     }
     
+    //function for which an alert pops up to display database data
     func showMessage(title: String, message: String){
         let alert = UIAlertController(title: title, message: message, preferredStyle: UIAlertController.Style.alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { action in
