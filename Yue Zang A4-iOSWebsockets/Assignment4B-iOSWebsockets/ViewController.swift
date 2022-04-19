@@ -47,7 +47,10 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
     override func viewDidLoad() {
         super.viewDidLoad()
  
+        print("Opening database")
+        
         do {
+            print("Successfully opened Database")
             database = try Database(name: "chatHistoryDB")
         } catch {
             fatalError("Error opening database")
@@ -81,6 +84,8 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             showDialog(type: ConnectionType.Disconnet)
         }
         
+        print("Adding new chat document to database")
+        
         let mutableDoc = MutableDocument(); //document representing an array of messages during a certain period
         let messagesArray = MutableArrayObject()
         
@@ -98,6 +103,7 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
         mutableDoc.setArray(messagesArray, forKey: "Messages")
 
         do {
+            print("Successfully added document to database")
             try database?.saveDocument(mutableDoc) //save document to database
         } catch {
             fatalError("Error saving document")
@@ -175,6 +181,8 @@ class ViewController: UIViewController, UITableViewDataSource, WebSocketDelegate
             .where(Expression.property("type").equalTo(Expression.string("messages")))
         
         var messageDisplay = "" //this is the variable containing everything to display to the UI
+        
+        print("Selecting all chats from the Database")
         
         //run the 'resultSet' query
         do {
